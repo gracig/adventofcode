@@ -43,9 +43,10 @@ computeAtIndex idx map
         op1   = g $ g $ fmap (+1) idx
         op2   = g $ g $ fmap (+2) idx
         op3   = g $ fmap (+3) idx
-        opn   = fmap (+4) idx
+        next  = fmap (+4) idx
         -- set map and compute next
         set::Map.Map Integer Integer -> Maybe Integer -> Maybe Integer -> Map.Map Integer Integer
         set m Nothing _ = m
         set m _ Nothing =  m
-        set m (Just k) (Just v) = computeAtIndex opn (Map.insert k v m) -- set the value and call the next computation
+        -- set the value and call the next computation
+        set m (Just k) (Just v) = computeAtIndex next $ Map.insert k v m
