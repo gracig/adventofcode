@@ -29,5 +29,3 @@ requiredFuel  mass
 totalRequiredFuel::[Integer]->Integer
 totalRequiredFuel= foldr ( \x acc ->  requiredFuel(x) + acc ) 0
  
-
-
