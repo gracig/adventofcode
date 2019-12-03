@@ -4,28 +4,28 @@ import Control.Applicative
 
 main = do
     contents <- getContents
-    let source  = [ read x::Integer | x <-Split.splitOn "," $ init contents ] -- Use of split function
-        intcode = Map.insert 2 2 (Map.insert 1 12 (Map.fromList $ zip [0..] source)) -- Use of zip to create an associative List
-        result  = compute (Just 0) intcode
+    let source  = [ read x::Integer | x <-Split.splitOn "," $ init contents ]
+        intcode = Map.insert 2 2 $ Map.insert 1 12 $ Map.fromList $ zip [0..] source 
+        result  = compute intcode
     putStrLn $ "Initial IntCode: " ++ (show intcode)
     putStrLn $ "Final   IntCode: " ++ (show result)
     putStrLn $ "The value at position 0 is " ++ (show $ Map.lookup 0 result)
-
     let nvresult = findNounAndVerb intcode 19690720
     putStrLn $ "The value of nvresult is " ++ (show nvresult )
 
 -- Stage 2: Find noun and verbs that satisfies a criteria
 findNounAndVerb :: Map.Map Integer Integer -> Integer -> Integer
 findNounAndVerb map expected =
-    head [ 100 * n + v | n <- [0..99], v <- [0..99] , isExpected n v ]
-    where
-        isExpected n v =
-            Map.lookup 0 (compute (Just 0) (Map.insert 2 v ( Map.insert 1 n map ))) == Just expected
+    head [ 100 * n + v | n <- [0..99], v <- [0..99] , result n v == Just expected ]
+    where result n v = Map.lookup 0 $ compute $ Map.insert 2 v $ Map.insert 1 n map
 
 --Stage 1: compute intcode instructions and return another modified intcode
-compute :: Maybe Integer -> Map.Map Integer Integer -> Map.Map Integer Integer
-compute idx map 
-    | isSum = set map op3 $ (+) <$> op1 <*> op2  -- use of applicative Maybe to perform calculation on op1 and op2
+compute :: Map.Map Integer Integer -> Map.Map Integer Integer
+compute = computeAtIndex (Just 0)
+
+computeAtIndex :: Maybe Integer -> Map.Map Integer Integer -> Map.Map Integer Integer
+computeAtIndex idx map 
+    | isSum = set map op3 $ (+) <$> op1 <*> op2  
     | isMul = set map op3 $ (*) <$> op1 <*> op2
     | isRet = map
     | otherwise = map
@@ -48,4 +48,4 @@ compute idx map
         set::Map.Map Integer Integer -> Maybe Integer -> Maybe Integer -> Map.Map Integer Integer
         set m Nothing _ = m
         set m _ Nothing =  m
-        set m (Just k) (Just v) = compute opn (Map.insert k v m) -- set the value and call the next computation
+        set m (Just k) (Just v) = computeAtIndex opn (Map.insert k v m) -- set the value and call the next computation
