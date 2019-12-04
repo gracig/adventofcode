@@ -29,25 +29,25 @@ digits x = case x of
 isNeverDecrease :: [Integer] -> Bool
 isNeverDecrease xs = case xs of
     []      ->  False
-    (x:[])  ->  True
-    (x:xs)  ->  if x > (head xs)
+    x:[]    ->  True
+    x:xs    ->  if x > (head xs)
                     then False
                     else isNeverDecrease xs
     
 isDoubleAdjacent :: [Integer] -> Bool
 isDoubleAdjacent xs = case xs of
     []     ->   False
-    [x]    ->   False
-    (x:xs) ->   if x == (head xs)
+    x:[]   ->   False
+    x:xs   ->   if x == (head xs)
                     then True
                     else isDoubleAdjacent xs
 
 isDoubleAdjacent' :: [Integer] -> Bool
 isDoubleAdjacent' xs = case xs of
     []          ->  False
-    (x:[])      ->  False
-    (x1:x2:[])  ->  x1 == x2
-    (x:xs)      ->  if (x == (head xs)) 
+    x:[]        ->  False
+    x1:x2:[]    ->  x1 == x2
+    x:xs        ->  if (x == (head xs)) 
                         then if (x /= (head (tail xs)))
                             then True
                             else isDoubleAdjacent' $ dropWhile (==x) xs
