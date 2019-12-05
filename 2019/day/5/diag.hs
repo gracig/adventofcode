@@ -3,13 +3,26 @@ import Control.Applicative
 import System.IO
 import System.Environment   
 
+data PmMode = Position | Immediate deriving (Eq, Show)
+data Opcode = Sum PmMode PmMode PmMode
+            | Mul PmMode PmMode PmMode
+            | Inp PmMode
+            | Ret PmMode
+            | Jpt PmMode PmMode
+            | Jpf PmMode PmMode
+            | Lt  PmMode PmMode PmMode
+            | Eq  PmMode PmMode PmMode
+            | End
+data Instruction = Instruction Integer Integer Integer Integer Integer
+type Index  = Integer
+type Value  = Integer
+type Memory = Map.Map Index Value
+
 main = do
     [f] <- getArgs
     input <- readFile f
-    let
-        pg  = Map.fromList $ zip [0..]  [ read x::Integer | x <- split ',' $ input ]
-    compute pg     
-  
+    compute $ Map.fromList $ zip [0..]  [ read x::Integer | x <- split ',' $ input ]
+    
 compute :: Memory -> IO ()
 compute = computeAt 0
 
@@ -144,21 +157,6 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                 getInteger :: IO Integer
                 getInteger =  readLn
 
-type Index  = Integer
-type Value  = Integer
-data PmMode = Position | Immediate deriving (Eq, Show)
-data Opcode = Sum PmMode PmMode PmMode
-            | Mul PmMode PmMode PmMode
-            | Inp PmMode
-            | Ret PmMode
-            | Jpt PmMode PmMode
-            | Jpf PmMode PmMode
-            | Lt  PmMode PmMode PmMode
-            | Eq  PmMode PmMode PmMode
-            | End
-type Memory = Map.Map Index Value
-data Instruction = Instruction Integer Integer Integer Integer Integer
-
 instructionFromValue :: Value -> Maybe Instruction
 instructionFromValue v = case digits v of
     []          -> Nothing 
@@ -168,6 +166,11 @@ instructionFromValue v = case digits v of
     [b,c,d,e]   -> Just ( Instruction 0 b c d e )
     [a,b,c,d,e] -> Just ( Instruction a b c d e )
     xs          -> Nothing
+    where
+        digits :: Integral x => x -> [x]
+        digits x = case x of
+            0       ->  []
+            x       ->  digits (x `div` 10) ++ [ x `mod` 10 ]
 
 opcodeFromInstruction :: Instruction -> Maybe Opcode
 opcodeFromInstruction instruction = case instruction of
@@ -197,20 +200,10 @@ opcodeFromInstruction instruction = case instruction of
             rpmode x = case pmode x of
                 Nothing  -> error "position from nothing" 
                 Just x   -> x 
-         
--- readInstruction:: Memory -> dex -> Opcode
--- readInstruction m i = case Map.lookup i m of
---     Nothing -> Err i
---     Just v  -> digits x
 
-digits :: Integral x => x -> [x]
-digits x = case x of
-    0       ->  []
-    x       ->  digits (x `div` 10) ++ [ x `mod` 10 ]
- 
 split :: Char -> String -> [String]
 split c s =  
     case dropWhile (==c) s of
         "" -> []
         s' -> w : split c s''
-            where (w, s'') = break (==c) s'
+            where (w, s'') = break (==c) s' 
