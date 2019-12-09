@@ -36,7 +36,6 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                 | p3 == Nothing ->  return ()
                 | vl == Nothing ->  return ()
                 | otherwise     ->  do
---                    putStrLn $ "[SUM]:" ++ (show vl) ++ " stored at address " ++ (show p3) 
                     computeAt ni ( setValue p3 vl mem )
                 where
                     p1 = getValue m1 1
@@ -50,7 +49,6 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                 | p3 == Nothing ->  return ()
                 | vl == Nothing ->  return ()
                 | otherwise     ->  do
---                    putStrLn $ "[MUL]:" ++ (show [m1,m2,m3] ) ++ (show [p1,p2,p3,vl] )++ " stored at address " ++ (show p3) 
                     computeAt ni ( setValue p3 vl mem )
                 where
                     p1 = getValue m1 1
@@ -64,7 +62,6 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                 | p3 == Nothing ->  return ()
                 | vl == Nothing ->  return ()
                 | otherwise     ->  do
---                    putStrLn $ "[LT ]:" ++ (show [m1,m2,m3] ) ++ (show [p1,p2,p3,vl] )++ " stored at address " ++ (show p3) 
                     computeAt ni ( setValue p3 vl mem )
                 where
                     p1 = getValue m1 1
@@ -81,7 +78,6 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                 | p3 == Nothing ->  return ()
                 | vl == Nothing ->  return ()
                 | otherwise     ->  do
---                    putStrLn $ "[EQ ]:" ++ (show [m1,m2,m3] ) ++ (show [p1,p2,p3,vl] )++ " stored at address " ++ (show p3) 
                     computeAt ni ( setValue p3 vl mem )
                 where
                     p1 = getValue m1 1
@@ -96,7 +92,6 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                 | p1 == Nothing ->  return ()
                 | p2 == Nothing ->  return ()
                 | otherwise     ->  do
---                    putStrLn $ "[JMT]:" ++ (show [m1,m2] ) ++ (show [p1,p2] ) 
                     computeAt ni mem 
                 where
                     p1 = getValue m1 1
@@ -108,7 +103,6 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                 | p1 == Nothing ->  return ()
                 | p2 == Nothing ->  return ()
                 | otherwise     ->  do
---                    putStrLn $ "[JMF]:" ++ (show [m1,m2] ) ++ (show [p1,p2] ) 
                     computeAt ni mem 
                 where
                     p1 = getValue m1 1

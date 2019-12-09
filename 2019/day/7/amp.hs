@@ -4,69 +4,130 @@ import System.IO
 import System.Environment   
 
 main = do
-    [f] <- getArgs
-    input <- readFile f
-    let program = Map.fromList $ zip [0..]  [ read x::Integer | x <- split ',' $ input ]
-    compute program
+    testday2
+    testday5
+    testday7
 
-compute :: Memory -> IO ()
-compute = computeAt 0
+type Phase = [Integer]
+
+findMax :: Program -> [Phase] -> (Phase, Maybe Integer)
+findMax pgm phases = case phases of
+    []      ->  error "called with empty list"
+    p:[]    ->  (p, amp pgm p)
+    p:ps    ->  let ampx = (p, amp pgm p)
+                    ampxs = findMax pgm ps
+                in  case (>) <$> (snd ampx) <*> (snd ampxs) of
+                    Nothing     -> (p, Nothing)
+                    Just True   -> ampx
+                    Just False  -> ampxs
+                                
+amp :: Program -> [Integer] -> Maybe Integer
+amp pg ps = thruster ( initA . reverse $ ps ) 0
+    where
+        thruster :: [Status] -> Integer -> Maybe Integer
+        thruster chain v = case chainA chain v of
+            []              -> Nothing
+            (s, i, p, o):xs -> case s of
+                Output -> case computeAt i p of
+                    x@(s',i',p',o') -> case s' of
+                        Done -> Just o
+                        Failed -> Nothing
+                        Input -> thruster (x:xs) o
+        
+        initA :: [Integer] -> [Status]
+        initA ps = case ps of
+            []      ->  []
+            x:xs    ->  case computeAt 0 pg of
+                (s, i, p, o)    ->  case s of 
+                    Input   -> ( computeAt i ( Map.insert o x p) ): (initA xs)
+                    _       -> error "init amp failed"
+        chainA :: [Status] -> Integer -> [Status]
+        chainA as v = case as of
+            [] -> []
+            x@(s, i, p, o):[]   -> case s of
+                Input   ->  [ computeAt i ( Map.insert o v p) ]
+                _ -> error "Unexpected input"
+            x@(s, i, p, o):xs   -> case chainA xs v of
+                (s', i', p', o'):ys -> case s' of
+                    Output  -> case s of
+                        Input -> (computeAt i $ Map.insert o o' p) : (computeAt i' p' ) : ys
+                    _ -> error "Unexpected output"
+        
+findNV :: Map.Map Integer Integer -> Integer -> Integer
+findNV map expected =
+    head [ 100 * n + v | n <- [0..99], v <- [0..99] , computeNV n v map == Just expected ]
+
+computeNV :: Integer -> Integer -> Program -> Maybe Integer
+computeNV n v intcode =  case compute (Map.insert 2 v $ Map.insert 1 n intcode) [] of
+    ((s, i, p, o), output) -> Map.lookup 0 p
 
 data PmMode = Position | Immediate deriving (Eq, Show)
 data Opcode = Sum PmMode PmMode PmMode
             | Mul PmMode PmMode PmMode
             | Inp PmMode
-            | Ret PmMode
+            | Out PmMode
             | Jpt PmMode PmMode
             | Jpf PmMode PmMode
             | Lt  PmMode PmMode PmMode
             | Eq  PmMode PmMode PmMode
             | End
 data Instruction = Instruction Integer Integer Integer Integer Integer
-type Index  = Integer
-type Value  = Integer
-type Memory = Map.Map Index Value
+type Pointer    = Integer
+type Value      = Integer
+type Program    = Map.Map Pointer Value
+data State      = Done 
+                | Failed 
+                | Output 
+                | Input
+type Status     = ( State, Pointer, Program, Integer)
+type Input      = [Integer]
+type Output     = [Integer]
 
-computeAt :: Index -> Memory -> IO()
-computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeFromInstruction of
-        Nothing -> return ()
+compute :: Program -> Input -> ( Status, Output)
+compute program input = compute' 0 program input []
+    where 
+        compute' :: Pointer -> Program -> Input -> Output -> ( Status,Output)
+        compute' ptr pgm inp out = case computeAt ptr pgm of
+            status@(s, i, p, o) -> case s of 
+                Done    -> (status, out)
+                Failed  -> (status, out)
+                Output  -> compute' i p inp ( o:out )
+                Input   -> compute' i ( Map.insert o (head inp) p) (tail inp) out 
+
+computeAt :: Pointer -> Program -> Status
+computeAt ptr pgm = case Map.lookup ptr pgm >>= instructionFromValue >>= opcodeFromInstruction of
+        Nothing -> failure
         Just op -> case op of
             Sum m1 m2 m3 
-                | p1 == Nothing ->  return ()
-                | p2 == Nothing ->  return ()
-                | p3 == Nothing ->  return ()
-                | vl == Nothing ->  return ()
-                | otherwise     ->  do
---                    putStrLn $ "[SUM]:" ++ (show vl) ++ " stored at address " ++ (show p3) 
-                    computeAt ni ( setValue p3 vl mem )
+                | p1 == Nothing ->  failure
+                | p2 == Nothing ->  failure
+                | p3 == Nothing ->  failure
+                | vl == Nothing ->  failure
+                | otherwise     ->  computeAt nptr ( setValue p3 vl pgm ) 
                 where
                     p1 = getValue m1 1
                     p2 = getValue m2 2
                     p3 = getRef   m3 3
                     vl = (+) <$> p1 <*> p2
-                    ni = idx + 4
+                    nptr = ptr + 4
             Mul m1 m2 m3 
-                | p1 == Nothing ->  return ()
-                | p2 == Nothing ->  return ()
-                | p3 == Nothing ->  return ()
-                | vl == Nothing ->  return ()
-                | otherwise     ->  do
---                    putStrLn $ "[MUL]:" ++ (show [m1,m2,m3] ) ++ (show [p1,p2,p3,vl] )++ " stored at address " ++ (show p3) 
-                    computeAt ni ( setValue p3 vl mem )
+                | p1 == Nothing ->  failure
+                | p2 == Nothing ->  failure
+                | p3 == Nothing ->  failure
+                | vl == Nothing ->  failure
+                | otherwise     ->  computeAt nptr ( setValue p3 vl pgm )
                 where
                     p1 = getValue m1 1
                     p2 = getValue m2 2
                     p3 = getRef   m3 3
                     vl = (*) <$> p1 <*> p2
-                    ni = idx + 4
+                    nptr = ptr + 4
             Lt  m1 m2 m3 
-                | p1 == Nothing ->  return ()
-                | p2 == Nothing ->  return ()
-                | p3 == Nothing ->  return ()
-                | vl == Nothing ->  return ()
-                | otherwise     ->  do
---                    putStrLn $ "[LT ]:" ++ (show [m1,m2,m3] ) ++ (show [p1,p2,p3,vl] )++ " stored at address " ++ (show p3) 
-                    computeAt ni ( setValue p3 vl mem )
+                | p1 == Nothing ->  failure
+                | p2 == Nothing ->  failure
+                | p3 == Nothing ->  failure
+                | vl == Nothing ->  failure
+                | otherwise     ->  computeAt nptr ( setValue p3 vl pgm ) 
                 where
                     p1 = getValue m1 1
                     p2 = getValue m2 2
@@ -75,15 +136,13 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                         Nothing     -> Nothing 
                         Just True   -> Just 1
                         Just False  -> Just 0
-                    ni = idx + 4
+                    nptr = ptr + 4
             Eq  m1 m2 m3 
-                | p1 == Nothing ->  return ()
-                | p2 == Nothing ->  return ()
-                | p3 == Nothing ->  return ()
-                | vl == Nothing ->  return ()
-                | otherwise     ->  do
---                    putStrLn $ "[EQ ]:" ++ (show [m1,m2,m3] ) ++ (show [p1,p2,p3,vl] )++ " stored at address " ++ (show p3) 
-                    computeAt ni ( setValue p3 vl mem )
+                | p1 == Nothing ->  failure
+                | p2 == Nothing ->  failure
+                | p3 == Nothing ->  failure
+                | vl == Nothing ->  failure
+                | otherwise     ->  computeAt nptr ( setValue p3 vl pgm ) 
                 where
                     p1 = getValue m1 1
                     p2 = getValue m2 2
@@ -92,76 +151,62 @@ computeAt idx mem = case Map.lookup idx mem >>= instructionFromValue >>= opcodeF
                         Nothing     -> Nothing 
                         Just True   -> Just 1
                         Just False  -> Just 0
-                    ni = idx + 4
+                    nptr = ptr + 4
             Jpt m1 m2 
-                | p1 == Nothing ->  return ()
-                | p2 == Nothing ->  return ()
-                | otherwise     ->  do
---                    putStrLn $ "[JMT]:" ++ (show [m1,m2] ) ++ (show [p1,p2] ) 
-                    computeAt ni mem 
+                | p1 == Nothing ->  failure
+                | p2 == Nothing ->  failure
+                | otherwise     ->  computeAt nptr pgm 
                 where
                     p1 = getValue m1 1
                     p2 = getValue m2 2
-                    ni = case ((/=0) <$> p1, p2) of
+                    nptr = case ((/=0) <$> p1, p2) of
                         (Just True, Just v2) -> v2
-                        (_,_) -> idx + 3
+                        (_,_) -> ptr + 3
             Jpf m1 m2 
-                | p1 == Nothing ->  return ()
-                | p2 == Nothing ->  return ()
-                | otherwise     ->  do
---                    putStrLn $ "[JMF]:" ++ (show [m1,m2] ) ++ (show [p1,p2] ) 
-                    computeAt ni mem 
+                | p1 == Nothing ->  failure
+                | p2 == Nothing ->  failure
+                | otherwise     ->  computeAt nptr pgm 
                 where
                     p1 = getValue m1 1
                     p2 = getValue m2 2
-                    ni = case ((==0) <$> p1, p2) of
+                    nptr = case ((==0) <$> p1, p2) of
                         (Just True, Just v2) -> v2
-                        (_,_) -> idx + 3 
+                        (_,_) -> ptr + 3 
             Inp m1
-                | p1 == Nothing ->  return ()
-                | otherwise     ->  do
-                    hPutStr stderr "[IN ]: "
-                    hFlush stderr
-                    vl <- getInteger               
-                    computeAt ni ( setValue p1 (Just vl) mem )
+                | p1 == Nothing ->  failure
+                | otherwise     ->  (Input, nptr, pgm, case p1 of Just x -> x) 
                 where
                     p1 = getRef m1 1
-                    ni = idx + 2
-            Ret m1
-                | p1 == Nothing ->  return ()
-                | otherwise     ->  do
-                    hPutStr stderr $ "[OUT]: "
-                    hFlush  stderr
-                    putStrLn    ( case p1 of 
-                                    Nothing-> "Nothing"
-                                    Just x -> show x 
-                                )
-                    computeAt ni mem
-                where
+                    nptr = ptr + 2
+            Out m1
+                | p1 == Nothing ->  failure
+                | otherwise     ->  (Output, nptr, pgm, case p1 of Just x -> x)                where
                     p1 = getValue m1 1
-                    ni = idx + 2
-            End ->  hPutStrLn stderr "status code 0"
+                    nptr = ptr + 2
+            End ->  done
             where
                 get::Map.Map Integer Integer -> Maybe Integer -> Maybe Integer
                 get m k = case (m,k) of
                     (m,Just i)  ->  Map.lookup i m
                     (m,Nothing) ->  Nothing
-                g = get mem
+                g = get pgm
                 getValue :: PmMode -> Integer -> Maybe Integer
                 getValue mode offset = case mode of 
-                    Position  -> g $ g $ fmap (+offset) (Just idx)
-                    Immediate -> g $ fmap (+offset) (Just idx)    
+                    Position  -> g $ g $ fmap (+offset) (Just ptr)
+                    Immediate -> g $ fmap (+offset) (Just ptr)    
                 getRef :: PmMode -> Integer -> Maybe Integer
                 getRef mode offset = case mode of 
-                    Position  -> g $ fmap (+offset) (Just idx)
-                    Immediate -> fmap (+offset) (Just idx)     
-                setValue :: Maybe Index -> Maybe Value -> Memory -> Memory
-                setValue idx val mem = case (idx,val) of
-                    (Nothing,_)         -> error "idx is Nothing"
+                    Position  -> g $ fmap (+offset) (Just ptr)
+                    Immediate -> fmap (+offset) (Just ptr)     
+                setValue :: Maybe Pointer -> Maybe Value -> Program -> Program
+                setValue ptr val pgm = case (ptr,val) of
+                    (Nothing,_)         -> error "ptr is Nothing"
                     (_,Nothing)         -> error "val is Nothing"
-                    (Just k, Just v)    -> Map.insert k v mem 
-                getInteger :: IO Integer
-                getInteger =  readLn
+                    (Just k, Just v)    -> Map.insert k v pgm 
+        where 
+            done            = (Done, ptr, pgm, 0)
+            failure         = (Failed, ptr, pgm, -1)
+
 
 instructionFromValue :: Value -> Maybe Instruction
 instructionFromValue v = case digits v of
@@ -187,7 +232,7 @@ opcodeFromInstruction instruction = case instruction of
         | opcode    == 1        -> Just $ Sum pc pb pa
         | opcode    == 2        -> Just $ Mul pc pb pa
         | opcode    == 3        -> Just $ Inp pc
-        | opcode    == 4        -> Just $ Ret pc
+        | opcode    == 4        -> Just $ Out pc
         | opcode    == 5        -> Just $ Jpt pc pb
         | opcode    == 6        -> Just $ Jpf pc pb
         | opcode    == 7        -> Just $ Lt  pc pb pa
@@ -213,3 +258,148 @@ split c s =
         "" -> []
         s' -> w : split c s''
             where (w, s'') = break (==c) s' 
+
+testday2 :: IO()
+testday2 = do
+    file <- readFile "test_day2"
+    let source  = [ read x::Integer | x <- split ',' $  file ]
+        intcode = Map.fromList $ zip [0..] source 
+    putStrLn $ show $ "Day 2. Part 1 " ++  case computeNV 12 2 intcode of 
+        Just 4714701 -> "Passed. " ++ show 4714701
+        _ -> "Failed"
+    putStrLn $ show $ "Day 2. Part 2 " ++  case findNV intcode 19690720 of 
+        5121 -> "Passed. " ++ show 5121
+        _ -> "Failed"
+            
+testday5 :: IO()
+testday5 = do
+    let intcodePEq8 = Map.fromList $ zip [0..] [3,9,8,9,10,9,4,9,99,-1,8]
+    putStrLn $ show $ "Day 5. Part 2, Test Position Eq8 " 
+        ++ ( expect 1 $ compute intcodePEq8 [8] )
+    putStrLn $ show $ "Day 5. Part 2, Test Position Eq8 " 
+        ++ ( expect 0 $ compute intcodePEq8 [7] )
+    putStrLn $ show $ "Day 5. Part 2, Test Position Eq8 " 
+        ++ ( expect 0 $ compute intcodePEq8 [9] )
+    let intcodePLt8 = Map.fromList $ zip [0..] [3,9,7,9,10,9,4,9,99,-1,8]
+    putStrLn $ show $ "Day 5. Part 2, Test Position Lt8 " 
+        ++ ( expect 0 $ compute intcodePLt8 [8] )
+    putStrLn $ show $ "Day 5. Part 2, Test Position Lt8 " 
+        ++ ( expect 1 $ compute intcodePLt8 [7] )
+    putStrLn $ show $ "Day 5. Part 2, Test Position Lt8 " 
+        ++ ( expect 0 $ compute intcodePLt8 [9] )
+    let intcodeIEq8 = Map.fromList $ zip [0..] [3,3,1108,-1,8,3,4,3,99]
+    putStrLn $ show $ "Day 5. Part 2, Test Immediate Eq8 " 
+        ++ ( expect 1 $ compute intcodeIEq8 [8] )
+    putStrLn $ show $ "Day 5. Part 2, Test Immediate Eq8 " 
+        ++ ( expect 0 $ compute intcodeIEq8 [7] )
+    putStrLn $ show $ "Day 5. Part 2, Test Immediate Eq8 " 
+        ++ ( expect 0 $ compute intcodeIEq8 [9] )
+    let intcodeILt8 = Map.fromList $ zip [0..] [3,3,1107,-1,8,3,4,3,99]
+    putStrLn $ show $ "Day 5. Part 2, Test Immediate Lt8 " 
+        ++ ( expect 0 $ compute intcodeILt8 [8] )
+    putStrLn $ show $ "Day 5. Part 2, Test Immediate Lt8 " 
+        ++ ( expect 1 $ compute intcodeILt8 [7] )
+    putStrLn $ show $ "Day 5. Part 2, Test Immediate Lt8 " 
+        ++ ( expect 0 $ compute intcodeILt8 [9] )
+
+    let intcodeLong8 = Map.fromList $ zip [0..] [3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99]
+    putStrLn $ show $ "Day 5. Part 2, Long 8 Eq 8" 
+        ++ ( expect 1000 $ compute intcodeLong8 [8] )
+    putStrLn $ show $ "Day 5. Part 2, Long8 Lt 8 " 
+        ++ ( expect 999 $ compute intcodeLong8 [7] )
+    putStrLn $ show $ "Day 5. Part 2, Test Gt 8" 
+        ++ ( expect 1001 $ compute intcodeLong8 [9] )
+
+    let intcodejump = Map.fromList $ zip [0..] [3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9]
+    putStrLn $ show $ "Day 5. Part 2, Jump.1" 
+        ++ ( expect 0 $ compute intcodejump [0] )
+    putStrLn $ show $ "Day 5. Part 2, Jump.1" 
+        ++ ( expect 1 $ compute intcodejump [1000] )
+
+    let intcodejump2 = Map.fromList $ zip [0..] [3,3,1105,-1,9,1101,0,0,12,4,12,99,1]
+    putStrLn $ show $ "Day 5. Part 2, Jump.2" 
+        ++ ( expect 0 $ compute intcodejump2 [0] )
+    putStrLn $ show $ "Day 5. Part 2, Jump.2" 
+        ++ ( expect 1 $ compute intcodejump2 [1000] )        
+                
+    file <- readFile "test_day5"
+    let source  = [ read x::Integer | x <- split ',' $ file ]
+        intcode = Map.fromList $ zip [0..] source 
+    putStrLn $ show $ "Day 5. Part 1 " 
+        ++ ( expect 4511442 $compute intcode [1] )
+    putStrLn $ show $ "Day 5. Part 2 " 
+        ++ (expect 12648139 $ compute intcode [5] )
+
+testday7 :: IO()
+testday7 = do
+    let
+        seq     =   [0..4]
+        phases  =   [ [a,b,c,d,e] | a <- seq, b <- seq, c <- seq, d <- seq, e <- seq
+                    , a /= b && a/=c && a/=d && a/=e 
+                    , b/= c, b/=d, b/=e
+                    , c/=d , c/=e
+                    , d/=e
+                    ]
+        lseq     =   [5..9]
+        lphases  =   [ [a,b,c,d,e] | a <- lseq, b <- lseq, c <- lseq, d <- lseq, e <- lseq
+                    , a /= b && a/=c && a/=d && a/=e 
+                    , b/= c, b/=d, b/=e
+                    , c/=d , c/=e
+                    , d/=e
+                    ]
+        code1 = Map.fromList $ zip [0..] [3,15,3,16,1002,16,10,16,1,16,15,15,4,15,99,0,0]
+        code2 = Map.fromList $ zip [0..] [3,23,3,24,1002,24,10,24,1002,23,-1,23,101,5,23,23,1,24,23,23,4,23,99,0,0]
+        code3 = Map.fromList $ zip [0..] [3,31,3,32,1002,32,10,32,1001,31,-2,31,1007,31,0,33,1002,33,7,33,1,33,31,31,1,32,31,31,4,31,99,0,0,0]
+        code4 = Map.fromList $ zip [0..] [3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5]
+        code5 = Map.fromList $ zip [0..] [3,52,1001,52,-5,52,3,53,1,52,56,54,1007,54,5,55,1005,55,26,1001,54,-5,54,1105,1,12,1,53,54,53,1008,54,0,55,1001,55,1,55,2,53,55,53,4,53,1001,56,-1,56,1005,56,6,99,0,0,0,0,10]
+    putStrLn $ show $ "Day 7. test. 1 " 
+        ++ ( expect' 43210 $ amp code1 [4,3,2,1,0] )
+    putStrLn $ show $ "Day 7. test. 1 " 
+        ++ ( expect'' ( [4,3,2,1,0], Just 43210 )  $ findMax code1 phases )
+    putStrLn $ show $ "Day 7. test. 2 " 
+        ++ ( expect' 54321 $ amp code2 [0,1,2,3,4] )
+    putStrLn $ show $ "Day 7. test. 2 " 
+        ++ ( expect'' ( [0,1,2,3,4], Just 54321 )  $ findMax code2 phases )
+    putStrLn $ show $ "Day 7. test. 3 " 
+        ++ ( expect' 65210 $ amp code3 [1,0,4,3,2] )
+    putStrLn $ show $ "Day 7. test. 3 " 
+        ++ ( expect'' ( [1,0,4,3,2], Just 65210 )  $ findMax code3 phases )
+    putStrLn $ show $ "Day 7. test. 4 " 
+        ++ ( expect' 139629729 $ amp code4 [9,8,7,6,5] )
+    putStrLn $ show $ "Day 7. test. 4 " 
+        ++ ( expect'' ( [9,8,7,6,5], Just 139629729 )  $ findMax code4 lphases )
+    putStrLn $ show $ "Day 7. test. 5 " 
+        ++ ( expect' 18216 $ amp code5 [9,7,8,5,6] )
+    putStrLn $ show $ "Day 7. test. 5 " 
+        ++ ( expect'' ( [9,7,8,5,6], Just 18216 )  $ findMax code5 lphases )
+    
+    file <- readFile "input"
+    let source  = [ read x::Integer | x <- split ',' $ file ]
+        intcode = Map.fromList $ zip [0..] source 
+    putStrLn $ show $ "Day 7. Part 1 " 
+        ++ (show $ findMax intcode phases)
+    putStrLn $ show $ "Day 7. Part 2 " 
+        ++ (show $ findMax intcode lphases)
+
+        
+expect'' :: (Phase, Maybe Integer) -> (Phase, Maybe Integer) -> String
+expect'' e r
+    | e == r    = "Passed. " ++ show e
+    | otherwise = "Failed. Expected " ++ show e ++ " Got " ++ show r
+
+expect' :: Integer -> Maybe Integer -> String
+expect' e r = case r of 
+    Nothing -> "has failed computation"
+    Just x 
+        | x == e   -> "Passed. "++ show e ++ " Got " ++ show x    
+        | otherwise     -> "Failed. Expected " ++ show e ++ " Got " ++ show x    
+        
+expect :: Integer -> (Status, Output) -> String
+expect e r = case r of 
+    ((Failed, i, p, o), out) -> "has failed computation at " ++ show  i
+    ((Done, i, p, o), output@(x:xs))
+        | x == e   -> "Passed. " ++ show output 
+        | otherwise     -> "Failed. Expected " ++ show e ++ " Got " ++ show x
+            ++ " Output: " ++ show output
+    
+        
