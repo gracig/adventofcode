@@ -172,55 +172,55 @@ data Direction = UP | DOWN | LEFT | RIGHT deriving (Show)
 type Robot = (Point,Direction)
 data PaintStatus = PaintStatus { robot::Robot, grid::Grid, code::Intcode.State, defaultColor::Integer } deriving (Show)
 
-painter' :: PaintStatus -> (PaintStatus,[String])
-painter' = Writer.runWriter . painter
-
-painter :: PaintStatus -> Writer.Writer [String] PaintStatus
-painter p = case p of 
-    PaintStatus robot@((rx,ry),rd) grid code defaultColor-> case Intcode.sts code of
-        Intcode.Begin -> 
-            let code' = Intcode.compute $ Intcode.exec code
-            in  do
-            Writer.tell [ "BEGIN Robot: " ++ show robot ++ "Grid: " ++ show grid  ] 
-            painter $ PaintStatus robot grid code' defaultColor
-        Intcode.Input ->
-            let color    = view defaultColor robot grid
-                code'    = Intcode.compute $ Intcode.input color code >>= Intcode.exec
-                (t:c:xs) = Intcode.acc code'
-                grid'    = paint c robot grid
-                robot'   = ( (move 1) . (turn t) ) robot
-            in  do
-                Writer.tell [ "Input: " ++ show color++ " Paint: " ++ show (fst robot) ++" "++ show c ++  " New Position: " ++ show robot'  ] 
-                painter $ PaintStatus robot' grid' code' defaultColor
-        _ -> return p
+painter :: PaintStatus -> (PaintStatus,[String])
+painter = Writer.runWriter . painter'
     where
-        turn :: Integer -> Robot -> Robot
-        turn x r = case r of
-            ((rx,ry),d) -> ((rx,ry),turn' x d)
-        turn':: Integer -> Direction -> Direction
-        turn' x d = case (x,d) of
-            (0,UP) -> LEFT
-            (0,DOWN) -> RIGHT
-            (0,LEFT) -> DOWN
-            (0,RIGHT) -> UP
-            (1,UP) -> RIGHT
-            (1,DOWN) -> LEFT
-            (1,LEFT) -> UP
-            (1,RIGHT) -> DOWN
-            (x',d') -> error ((show x') ++  "wrong" ++ (show d'))
-        move steps robot = case (steps,robot) of
-            (_,((x,y),UP))    -> ( (x,y+steps), UP   )
-            (_,((x,y),DOWN))  -> ( (x,y-steps), DOWN )
-            (_,((x,y),LEFT))  -> ( (x-steps,y), LEFT )
-            (_,((x,y),RIGHT)) -> ( (x+steps,y), RIGHT)
-        paint::Integer -> Robot -> Grid -> Grid
-        paint color robot grid = case robot of
-            ( xy ,_) -> Map.insert xy color grid
-        view::Integer -> Robot -> Grid -> Color
-        view defaultColor robot grid = case robot of 
-            ( xy ,_) -> case Map.lookup xy grid of
-                Nothing -> defaultColor
-                Just x  -> x
+        painter' :: PaintStatus -> Writer.Writer [String] PaintStatus
+        painter' p = case p of 
+            PaintStatus robot@((rx,ry),rd) grid code defaultColor-> case Intcode.sts code of
+                Intcode.Begin -> 
+                    let code' = Intcode.compute $ Intcode.exec code
+                    in  do
+                    Writer.tell [ "BEGIN Robot: " ++ show robot ++ "Grid: " ++ show grid  ] 
+                    painter' $ PaintStatus robot grid code' defaultColor
+                Intcode.Input ->
+                    let color    = view defaultColor robot grid
+                        code'    = Intcode.compute $ Intcode.input color code >>= Intcode.exec
+                        (t:c:xs) = Intcode.acc code'
+                        grid'    = paint c robot grid
+                        robot'   = ( (move 1) . (turn t) ) robot
+                    in  do
+                        Writer.tell [ "Input: " ++ show color++ " Paint: " ++ show (fst robot) ++" "++ show c ++  " New Position: " ++ show robot'  ] 
+                        painter' $ PaintStatus robot' grid' code' defaultColor
+                _ -> return p
+            where
+                turn :: Integer -> Robot -> Robot
+                turn x r = case r of
+                    ((rx,ry),d) -> ((rx,ry),turn' x d)
+                turn':: Integer -> Direction -> Direction
+                turn' x d = case (x,d) of
+                    (0,UP) -> LEFT
+                    (0,DOWN) -> RIGHT
+                    (0,LEFT) -> DOWN
+                    (0,RIGHT) -> UP
+                    (1,UP) -> RIGHT
+                    (1,DOWN) -> LEFT
+                    (1,LEFT) -> UP
+                    (1,RIGHT) -> DOWN
+                    (x',d') -> error ((show x') ++  "wrong" ++ (show d'))
+                move steps robot = case (steps,robot) of
+                    (_,((x,y),UP))    -> ( (x,y+steps), UP   )
+                    (_,((x,y),DOWN))  -> ( (x,y-steps), DOWN )
+                    (_,((x,y),LEFT))  -> ( (x-steps,y), LEFT )
+                    (_,((x,y),RIGHT)) -> ( (x+steps,y), RIGHT)
+                paint::Integer -> Robot -> Grid -> Grid
+                paint color robot grid = case robot of
+                    ( xy ,_) -> Map.insert xy color grid
+                view::Integer -> Robot -> Grid -> Color
+                view defaultColor robot grid = case robot of 
+                    ( xy ,_) -> case Map.lookup xy grid of
+                        Nothing -> defaultColor
+                        Just x  -> x
 
 
 gridBounds :: Grid -> (Integer,Integer,Integer,Integer)
@@ -232,14 +232,14 @@ gridBounds grid = Map.foldlWithKey  (\(xmin,xmax,ymin,ymax) (x,y) c ->
                                         in  (xmin',xmax',ymin',ymax')
                                     ) (0,0,0,0) grid
 
-encodeAsImageLayer :: Integer -> Grid -> Image.Layer
-encodeAsImageLayer bg grid = 
+encodeAsImageLayer :: Grid -> Image.Layer
+encodeAsImageLayer grid = 
     let (xmin,xmax,ymin,ymax) = gridBounds grid
         xlen = xmax-xmin+1
         ylen = ymax-ymin+1
         len  = xlen * ylen
-        txy  = \x y -> (x-xmin) + xlen * ( (ylen-1) - (y-ymin)  )
-        trg  = Map.foldlWithKey (\trg (x,y) c -> Map.insert (txy x y) c trg )  (Map.fromList [ (x, bg) | x <- [0..len-1] ]) grid
+        txy  = \x y -> (x-xmin) + ( xlen * ((ylen-1)- (y-ymin)) )
+        trg  = Map.foldlWithKey (\trg (x,y) c -> Map.insert (txy x y) c trg )  (Map.fromList [ (x, 0) | x <- [0..len-1] ]) grid
         raw  = map snd $ Map.toList trg
     in  Image.decode $ Image.fromList (fromIntegral xlen) (fromIntegral ylen) raw
             
@@ -249,27 +249,14 @@ exec11 = do
     let
         robot = ((0,0),UP)
         code = Intcode.fromList $ zip [0..] [ read x::Integer | x <- split ',' input11 ]
-        (paintStatus,log) = painter' $ PaintStatus robot (Map.fromList []) code 0
+        (paintStatus,log) = painter $ PaintStatus robot (Map.fromList []) code 0
         panel = grid paintStatus
-        layer = encodeAsImageLayer 1 panel
-        (paintStatus',log') = painter' $ PaintStatus robot (Map.fromList [((0,0),1)]) code 0
+        layer = encodeAsImageLayer panel
+        (paintStatus',log') = painter $ PaintStatus robot (Map.fromList [((0,0),1)]) code 0
         panel' = grid paintStatus'
         bounds' = gridBounds panel'
-        layer' = encodeAsImageLayer 1 panel'
+        layer' = encodeAsImageLayer panel'
     putStrLn $ show $ Map.size panel
     putStrLn $ show $ Map.size panel'
     putStrLn $ show bounds'
     Image.printLayer layer'
-    Image.printLayer layer
-    printList log'
-
-
--- day 11
--- input 0 for black
--- input 1 for white
--- color to paint 0 is black
--- color to pain  1 is white
--- 0 turns left 90
--- 1 turns right 90
--- moves 1 forward
-

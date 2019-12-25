@@ -77,7 +77,7 @@ printPixels row = case row of
     [] -> putStrLn ""
     x:xs -> do
         putStr $ case x of 
-            1 -> "X"
-            _ -> " "
+            1 -> "[]"
+            _ -> "  "
         printPixels xs
         
