@@ -1,0 +1,6 @@
+I solved the first part by just identifying digits using the char.is_ascii_digit function. And then I compose the number
+
+The second was solved by creating a state machine that started on every char. That way we could keep track of all possible instances of number in digital or string form, even if they overlap.
+
+I think that would be faster if we just use a regex, But build the state machine is much more cool.
+
