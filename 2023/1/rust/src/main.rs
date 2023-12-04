@@ -45,7 +45,7 @@ pub fn find_number_part_1(s: &str) -> Option<u64> {
     let mut last: Option<u64> = None;
     for c in s.chars() {
         if c.is_ascii_digit() {
-            update_numbers(&mut first, &mut last, c);
+            process_digit(&mut first, &mut last, c);
         }
     }
     if let (Some(x), Some(y)) = (first, last) {
@@ -106,17 +106,16 @@ pub fn find_number_part_2(s: &str) -> Option<u64> {
     let mut last: Option<u64> = None;
     let mut states: Vec<State> = [].to_vec();
     let transitions = get_transitions();
-    let mut collect_number = |digit: char| -> State {
-        update_numbers(&mut first, &mut last, digit);
-        State::Terminate
-    };
     for c in s.chars() {
         states.push(State::Initial); //Starts a new state machine on every char
         for state in states.iter_mut() {
             *state = match state {
-                State::Digit(x) => collect_number(*x),
-                ref x => transitions
-                    .get(&(x, c))
+                State::Digit(d) => {
+                    process_digit(&mut first, &mut last, *d);
+                    State::Terminate
+                },
+                ref s => transitions
+                    .get(&(s, c))
                     .cloned()
                     .unwrap_or(State::Terminate),
             };
@@ -129,11 +128,12 @@ pub fn find_number_part_2(s: &str) -> Option<u64> {
     None
 }
 
-pub fn update_numbers(first: &mut Option<u64>, last: &mut Option<u64>, c: char) {
+pub fn process_digit(first: &mut Option<u64>, last: &mut Option<u64>, c: char) {
+    let i = c as u64 - '0' as u64;
     if first.is_none() {
-        *first = Some(c as u64 - 48)
+        *first = Some(i)
     }
-    *last = Some(c as u64 - 48);
+    *last = Some(i);
 }
 
 pub fn process(file: &str, mut algorithm: impl FnMut(&str) -> Option<u64>) {
