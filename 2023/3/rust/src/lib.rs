@@ -4,13 +4,11 @@ use std::{
     io::{self, BufRead},
     path::Path,
 };
-
 use quadtree_rs::{
     area::{Area, AreaBuilder},
     point::Point,
     Quadtree,
 };
-
 pub fn part_1(filename: &str) -> Result<(), Box<dyn Error>> {
     let model = load(filename)?;
     println!("Result is: {}", model.sum_part_numbers());
@@ -21,26 +19,16 @@ pub fn part_2(filename: &str) -> Result<(), Box<dyn Error>> {
     println!("Result is: {}", model.multiply_geared_part_numbers());
     Ok(())
 }
-
-pub enum State {
-    BOL,
-    DOT,
-    CollectingPartNumber { col: u64, value: String },
-    PartNumber { col: u64, value: String },
-    Symbol { col: u64, value: char },
-}
-
 #[derive(Debug)]
-pub struct PartNumber {
+struct PartNumber {
     area: Area<i64>,
     value: u64,
 }
 #[derive(Debug)]
-pub struct Symbol {
+struct Symbol {
     pub location: Point<i64>,
     pub value: String,
 }
-
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
     P: AsRef<Path>,
@@ -49,27 +37,13 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
-pub fn adjust_width(x: u64, length: u64) -> (u64, u64) {
-    if x > 0 {
-        (x - 1, length + 3)
-    } else {
-        (x, length)
-    }
-}
-pub fn adjust_height(y: u64) -> (u64, u64) {
-    if y > 0 {
-        (y - 1, 3)
-    } else {
-        (y, 2)
-    }
-}
 #[derive(Debug)]
-pub enum Item {
+enum Item {
     Symbol(Symbol),
     PartNumber(PartNumber),
 }
 
-pub fn insert_part(
+fn insert_part(
     x: i64,
     y: i64,
     buffer: &str,
@@ -94,7 +68,7 @@ pub fn insert_part(
     Ok(())
 }
 
-pub fn area_with_distance(x: i64, y: i64, w: i64, h: i64, d: i64) -> Result<Area<i64>, String> {
+fn area_with_distance(x: i64, y: i64, w: i64, h: i64, d: i64) -> Result<Area<i64>, String> {
     let x1 = x - d;
     let y1 = y - d;
     let x2 = w + d * 2;
@@ -105,7 +79,8 @@ pub fn area_with_distance(x: i64, y: i64, w: i64, h: i64, d: i64) -> Result<Area
         .dimensions((x2, y2))
         .build()
 }
-pub fn insert_symbol(
+
+fn insert_symbol(
     x: i64,
     y: i64,
     value: &char,
@@ -126,7 +101,7 @@ pub fn insert_symbol(
     Ok(())
 }
 
-pub struct Model {
+struct Model {
     pub quadtree: Quadtree<i64, Item>,
     pub part_numbers: Vec<PartNumber>,
     pub symbols: Vec<Symbol>,
@@ -191,7 +166,7 @@ impl Model {
     }
 }
 
-pub fn load(filename: &str) -> Result<Model, Box<dyn Error>> {
+fn load(filename: &str) -> Result<Model, Box<dyn Error>> {
     let mut quadtree: Quadtree<i64, Item> = Quadtree::new(10);
     let mut part_numbers: Vec<PartNumber> = vec![];
     let mut symbols: Vec<Symbol> = vec![];
